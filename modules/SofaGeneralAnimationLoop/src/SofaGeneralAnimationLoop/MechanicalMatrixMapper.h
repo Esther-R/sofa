@@ -90,6 +90,68 @@ using sofa::core::MechanicalParams ;
 using sofa::core::objectmodel::ComponentState ;
 
 
+class MatrixProduct
+{
+
+public:
+
+    Eigen::SparseMatrix<double>* m_A { nullptr };
+    Eigen::SparseMatrix<double>* m_B { nullptr };
+
+    Eigen::SparseMatrix<double> m_C; /// Result of A*B
+
+    void computeIntersection()
+    {
+        m_hasComputedIntersection = true;
+
+        computeTransposeB();
+        computeIntersectionAB();
+    }
+    void computeProduct()
+    {
+        if (m_hasComputedIntersection == false)
+        {
+            computeIntersection();
+        }
+
+        // compute m_C;
+    }
+
+    void computeTransposeB()
+    {
+        m_transposeB;
+    }
+
+    void computeIntersectionAB()
+    {
+        m_transposeB; // input
+
+        m_intersectionAB; // output
+        // compute profile of m_C (col, row indices); //output
+    }
+
+private:
+
+    bool m_hasComputedIntersection { false };
+
+    // Transpose of B
+    struct TransposeB
+    {
+        //row, col, perm
+    };
+
+    TransposeB m_transposeB;
+
+    // Intersection of A*B
+
+    struct IntersectionAB
+    {
+        // list of list of pairs
+    };
+
+    IntersectionAB m_intersectionAB;
+};
+
 /**
  * \brief This component allows to map mechanical matrices (Stiffness, Mass) through a mapping.
  *
@@ -159,6 +221,9 @@ protected:
     Eigen::SparseMatrix<double> m_J2eig;
     unsigned int m_fullMatrixSize;
     size_t m_nbInteractionForceFields;
+
+    MatrixProduct J1tKProduct;
+    MatrixProduct J1tKJ1Product;
 
     MechanicalMatrixMapper() ;
 

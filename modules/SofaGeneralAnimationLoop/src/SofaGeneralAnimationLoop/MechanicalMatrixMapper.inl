@@ -420,12 +420,25 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addKToMatrix(const Mechanic
     {
         m_nbColsJ2 = m_J2eig.cols();
     }
-    Eigen::SparseMatrix<double>  J1tKJ1eigen(m_nbColsJ1,m_nbColsJ1);
+//    Eigen::SparseMatrix<double>  J1tKJ1eigen(m_nbColsJ1,m_nbColsJ1);
+
 
     if (!d_skipJ1tKJ1.getValue())
     {
         sofa::helper::ScopedAdvancedTimer J1tKJ1Timer("J1tKJ1" );
-        J1tKJ1eigen = m_J1eig.transpose()*Keig*m_J1eig;
+//        J1tKJ1eigen = m_J1eig.transpose()*Keig*m_J1eig;
+
+        Eigen::SparseMatrix<double> J1teig = m_J1eig.transpose();
+
+        J1tKProduct.m_A = &J1teig;
+        J1tKProduct.m_B = &Keig;
+
+        J1tKProduct.computeProduct();
+
+        J1tKJ1Product.m_A = &J1tKJ1Product.m_C;
+        J1tKJ1Product.m_B = &m_J1eig;
+
+        J1tKJ1Product.computeProduct();
     }
 
     Eigen::SparseMatrix<double>  J2tKJ2eigen(m_nbColsJ2,m_nbColsJ2);
@@ -454,13 +467,13 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addKToMatrix(const Mechanic
     //--------------------------------------------------------------------------------------------------------------------
 
     unsigned int mstateSize = l_mechanicalState->getSize();
-    addPrecomputedMassToSystem(mparams,mstateSize,m_J1eig,J1tKJ1eigen);
+    addPrecomputedMassToSystem(mparams,mstateSize,m_J1eig,J1tKJ1Product.m_C);
     int offset,offrow, offcol;
 
     sofa::helper::AdvancedTimer::stepBegin("J1tKJ1-copy" );
     offset = mat11.offset;
-    for (int k=0; k<J1tKJ1eigen.outerSize(); ++k)
-        for (Eigen::SparseMatrix<double>::InnerIterator it(J1tKJ1eigen,k); it; ++it)
+    for (int k=0; k < J1tKJ1Product.m_C.outerSize(); ++k)
+        for (Eigen::SparseMatrix<double>::InnerIterator it(J1tKJ1Product.m_C,k); it; ++it)
         {
             mat11.matrix->add(offset + it.row(),offset + it.col(), it.value());
         }
