@@ -38,6 +38,7 @@
 #include <sofa/core/BaseMapping.h>
 #include <sofa/defaulttype/BaseMatrix.h>
 #include <Eigen/Sparse>
+#include<list>
 
 namespace sofa::component::interactionforcefield
 {
@@ -92,64 +93,42 @@ using sofa::core::objectmodel::ComponentState ;
 
 class MatrixProduct
 {
+    // Transpose of B
+    struct TransposeB
+    {
+        std::vector<int> rowIndex;
+        std::vector<int> columns;
+        std::vector<int> perm;
+    };
+
+    // Intersection of A*B
+    struct IntersectionAB
+    {
+        std::vector<std::vector<std::pair<int,int>>> intersection;
+    };
 
 public:
 
-    Eigen::SparseMatrix<double>* m_A { nullptr };
-    Eigen::SparseMatrix<double>* m_B { nullptr };
+    Eigen::SparseMatrix<double,Eigen::RowMajor>* m_A { nullptr };
+    Eigen::SparseMatrix<double,Eigen::RowMajor>* m_B { nullptr };
 
-    Eigen::SparseMatrix<double> m_C; /// Result of A*B
+    Eigen::SparseMatrix<double,Eigen::RowMajor> m_C; /// Result of A*B
 
-    void computeIntersection()
-    {
-        m_hasComputedIntersection = true;
-
-        computeTransposeB();
-        computeIntersectionAB();
-    }
-    void computeProduct()
-    {
-        if (m_hasComputedIntersection == false)
-        {
-            computeIntersection();
-        }
-
-        // compute m_C;
-    }
-
-    void computeTransposeB()
-    {
-        m_transposeB;
-    }
-
-    void computeIntersectionAB()
-    {
-        m_transposeB; // input
-
-        m_intersectionAB; // output
-        // compute profile of m_C (col, row indices); //output
-    }
+    void computeProduct();
 
 private:
 
     bool m_hasComputedIntersection { false };
 
-    // Transpose of B
-    struct TransposeB
-    {
-        //row, col, perm
-    };
-
     TransposeB m_transposeB;
-
-    // Intersection of A*B
-
-    struct IntersectionAB
-    {
-        // list of list of pairs
-    };
-
     IntersectionAB m_intersectionAB;
+
+    std::vector<int> sort_toSort(const std::vector<int> &vector);
+
+    void computeTransposeB();
+
+    void computeIntersection();
+
 };
 
 /**
@@ -217,8 +196,8 @@ protected:
 
 
     unsigned int m_nbColsJ1, m_nbColsJ2;
-    Eigen::SparseMatrix<double> m_J1eig;
-    Eigen::SparseMatrix<double> m_J2eig;
+    Eigen::SparseMatrix<double,Eigen::RowMajor> m_J1eig;
+    Eigen::SparseMatrix<double,Eigen::RowMajor> m_J2eig;
     unsigned int m_fullMatrixSize;
     size_t m_nbInteractionForceFields;
 
@@ -298,21 +277,21 @@ protected:
      *
      *
     */
-    virtual void addPrecomputedMassToSystem(const MechanicalParams* mparams,const unsigned int mstateSize,const Eigen::SparseMatrix<double> &Jeig, Eigen::SparseMatrix<double>& JtKJeig);
+    virtual void addPrecomputedMassToSystem(const MechanicalParams* mparams,const unsigned int mstateSize,const Eigen::SparseMatrix<double, Eigen::RowMajor> &Jeig, Eigen::SparseMatrix<double, Eigen::RowMajor>& JtKJeig);
 
     /**
      * \brief This method performs the copy of the jacobian matrix of the first  mstate to the eigen sparse format
      *
      *
     */
-    virtual void optimizeAndCopyMappingJacobianToEigenFormat1(const typename DataTypes1::MatrixDeriv& J, Eigen::SparseMatrix<double>& Jeig);
+    virtual void optimizeAndCopyMappingJacobianToEigenFormat1(const typename DataTypes1::MatrixDeriv& J, Eigen::SparseMatrix<double, Eigen::RowMajor>& Jeig);
 
     /**
      * \brief This method performs the copy of the jacobian matrix of the second mstate (not mandatory) to the eigen sparse format
      *
      *
     */
-    virtual void optimizeAndCopyMappingJacobianToEigenFormat2(const typename DataTypes2::MatrixDeriv& J, Eigen::SparseMatrix<double>& Jeig);
+    virtual void optimizeAndCopyMappingJacobianToEigenFormat2(const typename DataTypes2::MatrixDeriv& J, Eigen::SparseMatrix<double, Eigen::RowMajor>& Jeig);
 
     ////////////////////////// Inherited attributes ////////////////////////////
     /// https://gcc.gnu.org/onlinedocs/gcc/Name-lookup.html

@@ -44,7 +44,7 @@ using sofa::simulation::mechanicalvisitor::MechanicalResetConstraintVisitor;
 #include <Eigen/Sparse>
 
 #include <sofa/simulation/Node.h>
-
+#include <fstream>
 
 namespace sofa::component::interactionforcefield
 {
@@ -205,7 +205,7 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::accumulateJacobians(const M
 }
 
 template<class T>
-void copyKToEigenFormat(CompressedRowSparseMatrix< T >* K, Eigen::SparseMatrix<double,Eigen::ColMajor>& Keig)
+void copyKToEigenFormat(CompressedRowSparseMatrix< T >* K, Eigen::SparseMatrix<double,Eigen::RowMajor>& Keig)
 {
     // It is assumed that K is not compressed. All the data is containted in the temporary container K->btemp
     // This data is provided to Eigen to build a compressed sparse matrix in Eigen format.
@@ -240,7 +240,7 @@ void copyKToEigenFormat(CompressedRowSparseMatrix< T >* K, Eigen::SparseMatrix<d
     sofa::helper::AdvancedTimer::stepEnd("KfromTriplets" );
 }
 template<class InputFormat>
-static void copyMappingJacobianToEigenFormat(const typename InputFormat::MatrixDeriv& J, Eigen::SparseMatrix<double>& Jeig)
+static void copyMappingJacobianToEigenFormat(const typename InputFormat::MatrixDeriv& J, Eigen::SparseMatrix<double,Eigen::RowMajor>& Jeig)
 {
     typedef typename InputFormat::MatrixDeriv::RowConstIterator RowConstIterator;
     typedef typename InputFormat::MatrixDeriv::ColConstIterator ColConstIterator;
@@ -272,13 +272,13 @@ static void copyMappingJacobianToEigenFormat(const typename InputFormat::MatrixD
     Jeig.setFromTriplets(tripletListJ.begin(), tripletListJ.end());
 }
 template<class DataTypes1, class DataTypes2>
-void MechanicalMatrixMapper<DataTypes1, DataTypes2>::optimizeAndCopyMappingJacobianToEigenFormat1(const typename DataTypes1::MatrixDeriv& J, Eigen::SparseMatrix<double>& Jeig)
+void MechanicalMatrixMapper<DataTypes1, DataTypes2>::optimizeAndCopyMappingJacobianToEigenFormat1(const typename DataTypes1::MatrixDeriv& J, Eigen::SparseMatrix<double, Eigen::RowMajor>& Jeig)
 {
     copyMappingJacobianToEigenFormat<DataTypes1>(J, Jeig);
 }
 
 template<class DataTypes1, class DataTypes2>
-void MechanicalMatrixMapper<DataTypes1, DataTypes2>::optimizeAndCopyMappingJacobianToEigenFormat2(const typename DataTypes2::MatrixDeriv& J, Eigen::SparseMatrix<double>& Jeig)
+void MechanicalMatrixMapper<DataTypes1, DataTypes2>::optimizeAndCopyMappingJacobianToEigenFormat2(const typename DataTypes2::MatrixDeriv& J, Eigen::SparseMatrix<double, Eigen::RowMajor>& Jeig)
 {
     copyMappingJacobianToEigenFormat<DataTypes2>(J, Jeig);
 }
@@ -297,7 +297,7 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addMassToSystem(const Mecha
 }
 
 template<class DataTypes1, class DataTypes2>
-void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addPrecomputedMassToSystem(const MechanicalParams* mparams, const unsigned int mstateSize,const Eigen::SparseMatrix<double> &Jeig, Eigen::SparseMatrix<double> &JtKJeig)
+void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addPrecomputedMassToSystem(const MechanicalParams* mparams, const unsigned int mstateSize,const Eigen::SparseMatrix<double, Eigen::RowMajor> &Jeig, Eigen::SparseMatrix<double, Eigen::RowMajor> &JtKJeig)
 {
     SOFA_UNUSED(mparams);
     SOFA_UNUSED(mstateSize);
@@ -390,7 +390,7 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addKToMatrix(const Mechanic
     //------------------------------------------------------------------------------
 
     sofa::helper::AdvancedTimer::stepBegin("copyKToEigen" );
-    Eigen::SparseMatrix<double,Eigen::ColMajor> Keig;
+    Eigen::SparseMatrix<double,Eigen::RowMajor> Keig;
     Keig.resize(m_fullMatrixSize,m_fullMatrixSize);
     copyKToEigenFormat(K,Keig);
     sofa::helper::AdvancedTimer::stepEnd("copyKToEigen" );
@@ -428,22 +428,41 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addKToMatrix(const Mechanic
         sofa::helper::ScopedAdvancedTimer J1tKJ1Timer("J1tKJ1" );
 //        J1tKJ1eigen = m_J1eig.transpose()*Keig*m_J1eig;
 
-        Eigen::SparseMatrix<double> J1teig = m_J1eig.transpose();
+        Eigen::SparseMatrix<double,Eigen::RowMajor> J1teig = m_J1eig.transpose();
+
+
+        J1teig.makeCompressed();
+        m_J1eig.makeCompressed();
+
+//        const auto writeMatrix = [](Eigen::SparseMatrix<double,Eigen::RowMajor>& mat, std::string path)
+//        {
+//            std::ofstream fichier(path.c_str(), std::ios::out | std::ios::trunc);
+//            if(fichier)  // si l'ouverture a réussi
+//            {
+//                fichier << mat << "\n";
+//                fichier.close();  // on referme le fichier
+//            }
+//        };
+//        writeMatrix(m_J1eig, "m_J1eig.txt");
+//        writeMatrix(J1teig, "J1teig.txt");
 
         J1tKProduct.m_A = &J1teig;
         J1tKProduct.m_B = &Keig;
 
         J1tKProduct.computeProduct();
 
-        J1tKJ1Product.m_A = &J1tKJ1Product.m_C;
+        J1tKProduct.m_C.makeCompressed();
+//        writeMatrix(J1tKProduct.m_C, "J1tKProduct.m_C.txt");
+
+        J1tKJ1Product.m_A = &J1tKProduct.m_C;
         J1tKJ1Product.m_B = &m_J1eig;
 
         J1tKJ1Product.computeProduct();
     }
 
-    Eigen::SparseMatrix<double>  J2tKJ2eigen(m_nbColsJ2,m_nbColsJ2);
-    Eigen::SparseMatrix<double>  J1tKJ2eigen(m_nbColsJ1,m_nbColsJ2);
-    Eigen::SparseMatrix<double>  J2tKJ1eigen(m_nbColsJ2,m_nbColsJ1);
+    Eigen::SparseMatrix<double,Eigen::RowMajor>  J2tKJ2eigen(m_nbColsJ2,m_nbColsJ2);
+    Eigen::SparseMatrix<double,Eigen::RowMajor>  J1tKJ2eigen(m_nbColsJ1,m_nbColsJ2);
+    Eigen::SparseMatrix<double,Eigen::RowMajor>  J2tKJ1eigen(m_nbColsJ2,m_nbColsJ1);
 
     if (bms1 != bms2)
     {
@@ -473,7 +492,7 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addKToMatrix(const Mechanic
     sofa::helper::AdvancedTimer::stepBegin("J1tKJ1-copy" );
     offset = mat11.offset;
     for (int k=0; k < J1tKJ1Product.m_C.outerSize(); ++k)
-        for (Eigen::SparseMatrix<double>::InnerIterator it(J1tKJ1Product.m_C,k); it; ++it)
+        for (Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator it(J1tKJ1Product.m_C,k); it; ++it)
         {
             mat11.matrix->add(offset + it.row(),offset + it.col(), it.value());
         }
@@ -484,7 +503,7 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addKToMatrix(const Mechanic
         sofa::helper::AdvancedTimer::stepBegin("J2tKJ2-copy" );
         offset = mat22.offset;
         for (int k=0; k<J2tKJ2eigen.outerSize(); ++k)
-            for (Eigen::SparseMatrix<double>::InnerIterator it(J2tKJ2eigen,k); it; ++it)
+            for (Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator it(J2tKJ2eigen,k); it; ++it)
             {
                 mat22.matrix->add(offset + it.row(),offset + it.col(), it.value());
             }
@@ -494,7 +513,7 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addKToMatrix(const Mechanic
         offrow = mat12.offRow;
         offcol = mat12.offCol;
         for (int k=0; k<J1tKJ2eigen.outerSize(); ++k)
-          for (Eigen::SparseMatrix<double>::InnerIterator it(J1tKJ2eigen,k); it; ++it)
+          for (Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator it(J1tKJ2eigen,k); it; ++it)
           {
                   mat12.matrix->add(offrow + it.row(),offcol + it.col(), it.value());
           }
@@ -505,7 +524,7 @@ void MechanicalMatrixMapper<DataTypes1, DataTypes2>::addKToMatrix(const Mechanic
         offcol = mat21.offCol;
 
         for (int k=0; k<J2tKJ1eigen.outerSize(); ++k)
-            for (Eigen::SparseMatrix<double>::InnerIterator it(J2tKJ1eigen,k); it; ++it)
+            for (Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator it(J2tKJ1eigen,k); it; ++it)
             {
                 mat21.matrix->add(offrow + it.row(),offcol + it.col(), it.value());
             }
